@@ -473,6 +473,25 @@ StatusOr<std::unique_ptr<HloModule>> GpuCompiler::RunHloPasses(
       tensorflow::profiler::TraceMeLevel::kInfo);
   TF_RETURN_IF_ERROR(
       OptimizeHloModule(module.get(), stream_exec, device_allocator));
+  // profiling before HLO optimization
+  std::unique_ptr<HloProfileIndexMap> profile_index_map;
+  std::unique_ptr<HloProfilePrinterData> profile_printer;
+
+  if (module->config().hlo_profiling_enabled() || VLOG_IS_ON(1)) {
+    HloCostAnalysis cost_analysis(ShapeSizeBytesFunction());
+    cost_analysis.set_bytes_per_second(
+        stream_exec->GetDeviceDescription().memory_bandwidth());
+    TF_RETURN_IF_ERROR(module->entry_computation()->Accept(&cost_analysis));
+    VLOG(1) << "HLO memory read+written: "
+            << tensorflow::strings::HumanReadableNumBytes(
+                   cost_analysis.bytes_accessed());
+    if (module->config().hlo_profiling_enabled()) {
+      profile_index_map = absl::make_unique<HloProfileIndexMap>(*module);
+      profile_printer =
+          CreateHloProfilePrinterData(*profile_index_map, cost_analysis,
+                                      module->entry_computation()->name());
+    }
+  }
 
   TF_RETURN_IF_ERROR(PrepareHloModuleForIrEmitting(module.get()));
 
@@ -680,21 +699,21 @@ StatusOr<std::unique_ptr<Executable>> GpuCompiler::RunBackend(
   std::unique_ptr<HloProfileIndexMap> profile_index_map;
   std::unique_ptr<HloProfilePrinterData> profile_printer;
 
-  if (module->config().hlo_profiling_enabled() || VLOG_IS_ON(1)) {
-    HloCostAnalysis cost_analysis(ShapeSizeBytesFunction());
-    cost_analysis.set_bytes_per_second(
-        stream_exec->GetDeviceDescription().memory_bandwidth());
-    TF_RETURN_IF_ERROR(module->entry_computation()->Accept(&cost_analysis));
-    VLOG(1) << "HLO memory read+written: "
-            << tensorflow::strings::HumanReadableNumBytes(
-                   cost_analysis.bytes_accessed());
-    if (module->config().hlo_profiling_enabled()) {
-      profile_index_map = absl::make_unique<HloProfileIndexMap>(*module);
-      profile_printer =
-          CreateHloProfilePrinterData(*profile_index_map, cost_analysis,
-                                      module->entry_computation()->name());
-    }
-  }
+  // if (module->config().hlo_profiling_enabled() || VLOG_IS_ON(1)) {
+  //   HloCostAnalysis cost_analysis(ShapeSizeBytesFunction());
+  //   cost_analysis.set_bytes_per_second(
+  //       stream_exec->GetDeviceDescription().memory_bandwidth());
+  //   TF_RETURN_IF_ERROR(module->entry_computation()->Accept(&cost_analysis));
+  //   VLOG(1) << "HLO memory read+written: "
+  //           << tensorflow::strings::HumanReadableNumBytes(
+  //                  cost_analysis.bytes_accessed());
+  //   if (module->config().hlo_profiling_enabled()) {
+  //     profile_index_map = absl::make_unique<HloProfileIndexMap>(*module);
+  //     profile_printer =
+  //         CreateHloProfilePrinterData(*profile_index_map, cost_analysis,
+  //                                     module->entry_computation()->name());
+  //   }
+  // }
 
   std::unique_ptr<llvm::Module> llvm_module;
   std::unique_ptr<BufferAssignment> buffer_assignment;

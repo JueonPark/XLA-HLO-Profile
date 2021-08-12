@@ -27,6 +27,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/human_readable_profile_builder.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/util.h"
+#include "tensorflow/compiler/xla/service/hlo_opcode.h"
 
 namespace xla {
 HloProfileIndexMap::HloProfileIndexMap(const HloModule& module,
@@ -81,6 +82,10 @@ std::unique_ptr<HloProfilePrinterData> CreateHloProfilePrinterData(
                  return left.second < right.second;
                });
 
+  // added for profiling
+  string file_path = SanitizeFileName(absl::StrFormat("%s.csv",
+                          entry_computation_name.substr(0, 9)));
+  string contents = "";
   for (const auto& pair : computation_and_profile_idx_list) {
     CHECK_LT(pair.second, profile_counters_size);
     const HloComputation* computation = pair.first;
@@ -108,7 +113,17 @@ std::unique_ptr<HloProfilePrinterData> CreateHloProfilePrinterData(
           cost_analysis.optimal_seconds(*hlo));
       instruction_info->set_profile_index(
           hlo_profile_index_map.GetProfileIndexFor(*hlo));
+      // added for profiling
+      string instr_string = absl::StrFormat(
+        "%s,%f,%f,%f\n",
+        HloOpcodeString(hlo->opcode()),
+        cost_analysis.flop_count(*hlo),
+        cost_analysis.transcendental_count(*hlo),
+        cost_analysis.bytes_accessed(*hlo)
+      );
+      contents += instr_string;
     }
+    tensorflow::WriteStringToFile(tensorflow::Env::Default(), file_path, contents);
   }
 
   // Add extra metrics if any.

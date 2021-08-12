@@ -37,7 +37,7 @@ def tf_library(
         tfcompile_flags = None,
         tfcompile_tool = "//tensorflow/compiler/aot:tfcompile",
         include_standard_runtime_deps = True,
-        enable_xla_hlo_profiling = False,
+        enable_xla_hlo_profiling = True,
         enable_tracemes = False,
         mlir_components = "None",
         deps = None,
