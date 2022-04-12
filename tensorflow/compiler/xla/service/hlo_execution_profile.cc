@@ -85,7 +85,7 @@ std::unique_ptr<HloProfilePrinterData> CreateHloProfilePrinterData(
   // added for profiling
   string file_path = SanitizeFileName(absl::StrFormat("%s.csv",
                           entry_computation_name.substr(0, 9)));
-  string contents = "";
+  string contents = "opcode,flop_count,transcendental_count,bytes_accessed\n";
   for (const auto& pair : computation_and_profile_idx_list) {
     CHECK_LT(pair.second, profile_counters_size);
     const HloComputation* computation = pair.first;
@@ -114,13 +114,25 @@ std::unique_ptr<HloProfilePrinterData> CreateHloProfilePrinterData(
       instruction_info->set_profile_index(
           hlo_profile_index_map.GetProfileIndexFor(*hlo));
       // added for profiling
-      string instr_string = absl::StrFormat(
-        "%s,%f,%f,%f\n",
-        HloOpcodeString(hlo->opcode()),
-        cost_analysis.flop_count(*hlo),
-        cost_analysis.transcendental_count(*hlo),
-        cost_analysis.bytes_accessed(*hlo)
-      );
+      string instr_string;
+      if (hlo->opcode() == HloOpcode::kFusion) {
+        instr_string = absl::StrFormat(
+          "%s,%f,%f,%f\n",
+          HloOpcodeString(hlo->name()),
+          cost_analysis.flop_count(*hlo),
+          cost_analysis.transcendental_count(*hlo),
+          cost_analysis.bytes_accessed(*hlo)
+        );
+      }
+      else {
+        instr_string = absl::StrFormat(
+          "%s,%f,%f,%f\n",
+          HloOpcodeString(hlo->opcode()),
+          cost_analysis.flop_count(*hlo),
+          cost_analysis.transcendental_count(*hlo),
+          cost_analysis.bytes_accessed(*hlo)
+        );
+      }
       contents += instr_string;
     }
     tensorflow::WriteStringToFile(tensorflow::Env::Default(), file_path, contents);
