@@ -84,7 +84,7 @@ std::unique_ptr<HloProfilePrinterData> CreateHloProfilePrinterData(
 
   // added for profiling
   string file_path = SanitizeFileName(absl::StrFormat("%s.csv",
-                          entry_computation_name.substr(0, 9)));
+                                      entry_computation_name));
   string contents = "opcode,flop_count,transcendental_count,bytes_accessed\n";
   for (const auto& pair : computation_and_profile_idx_list) {
     CHECK_LT(pair.second, profile_counters_size);
@@ -118,7 +118,7 @@ std::unique_ptr<HloProfilePrinterData> CreateHloProfilePrinterData(
       if (hlo->opcode() == HloOpcode::kFusion) {
         instr_string = absl::StrFormat(
           "%s,%f,%f,%f\n",
-          HloOpcodeString(hlo->name()),
+          hlo->name(),
           cost_analysis.flop_count(*hlo),
           cost_analysis.transcendental_count(*hlo),
           cost_analysis.bytes_accessed(*hlo)
