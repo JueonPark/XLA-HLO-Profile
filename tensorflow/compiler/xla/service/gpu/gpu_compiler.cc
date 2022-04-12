@@ -471,12 +471,12 @@ StatusOr<std::unique_ptr<HloModule>> GpuCompiler::RunHloPasses(
   tensorflow::profiler::TraceMe activity(
       [&] { return absl::StrCat("HLO Transforms:", module->name()); },
       tensorflow::profiler::TraceMeLevel::kInfo);
-  TF_RETURN_IF_ERROR(
-      OptimizeHloModule(module.get(), stream_exec, device_allocator));
-  // profiling before HLO optimization
+
+  // prepare for profiling
   std::unique_ptr<HloProfileIndexMap> profile_index_map;
   std::unique_ptr<HloProfilePrinterData> profile_printer;
-
+  
+  // profiling before HLO optimization
   if (module->config().hlo_profiling_enabled() || VLOG_IS_ON(1)) {
     HloCostAnalysis cost_analysis(ShapeSizeBytesFunction());
     cost_analysis.set_bytes_per_second(
@@ -489,6 +489,29 @@ StatusOr<std::unique_ptr<HloModule>> GpuCompiler::RunHloPasses(
       profile_index_map = absl::make_unique<HloProfileIndexMap>(*module);
       profile_printer =
           CreateHloProfilePrinterData(*profile_index_map, cost_analysis,
+                                      "before_" + 
+                                      module->entry_computation()->name());
+    }
+  }
+  
+  // HLO optimization
+  TF_RETURN_IF_ERROR(
+      OptimizeHloModule(module.get(), stream_exec, device_allocator));
+  
+  // profiling after HLO optimization
+  if (module->config().hlo_profiling_enabled() || VLOG_IS_ON(1)) {
+    HloCostAnalysis cost_analysis(ShapeSizeBytesFunction());
+    cost_analysis.set_bytes_per_second(
+        stream_exec->GetDeviceDescription().memory_bandwidth());
+    TF_RETURN_IF_ERROR(module->entry_computation()->Accept(&cost_analysis));
+    VLOG(1) << "HLO memory read+written: "
+            << tensorflow::strings::HumanReadableNumBytes(
+                   cost_analysis.bytes_accessed());
+    if (module->config().hlo_profiling_enabled()) {
+      profile_index_map = absl::make_unique<HloProfileIndexMap>(*module);
+      profile_printer =
+          CreateHloProfilePrinterData(*profile_index_map, cost_analysis,
+                                      "after_" + 
                                       module->entry_computation()->name());
     }
   }
